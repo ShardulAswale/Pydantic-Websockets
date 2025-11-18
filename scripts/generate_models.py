@@ -8,8 +8,7 @@ import sys
 
 def main() -> int:
     try:
-        from datamodel_code_generator import InputFileType
-        from datamodel_code_generator import generate
+        from datamodel_code_generator import InputFileType, generate, DataModelType
     except Exception:
         print(
             "datamodel-code-generator is not installed. "
@@ -28,21 +27,30 @@ def main() -> int:
         / "stock_schema.json"
     )
     out_path = (
-        project_root / "src" / "stock_ticker_api" / "models" / "stock_model.py"
+        project_root
+        / "src"
+        / "stock_ticker_api"
+        / "models"
+        / "stock_model.py"
     )
 
     out_path.parent.mkdir(parents=True, exist_ok=True)
 
     generate(
-        input_=str(schema_path),
+        # Read the JSON schema from file
+        schema_path.read_text(encoding="utf-8"),
         input_file_type=InputFileType.JsonSchema,
-        output=str(out_path),
-        target_python_version="3.13",
-        use_pydantic_v2=True,
+        input_filename=str(schema_path),
+        output=out_path,  # Path object, not string
+        # Request Pydantic v2 models explicitly
+        output_model_type=DataModelType.PydanticV2BaseModel,
+        # IMPORTANT: don't pass target_python_version="3.13" because
+        # datamodel-code-generator/black don't know about 3.13 yet.
     )
 
     print(f"Generated: {out_path}")
     return 0
+
 
 if __name__ == "__main__":
     raise SystemExit(main())

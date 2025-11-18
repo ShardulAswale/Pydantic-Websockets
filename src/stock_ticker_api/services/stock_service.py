@@ -1,25 +1,34 @@
 import asyncio
 import random
 from datetime import datetime, timezone
-from typing import Dict, List, Set
+from typing import Dict, List, Set, Optional
 
 from fastapi import WebSocket
 
 from ..models.stock_model import StockTicker
 
+
 class StockService:
     """In-memory stock price store + async broadcaster."""
 
     def __init__(self) -> None:
-        self._symbols: Dict[str, float] = {
+        # initial prices
+        self._initial_symbols: Dict[str, float] = {
             "AAPL": 180.00,
             "GOOG": 145.00,
             "MSFT": 380.00,
             "AMZN": 145.00,
         }
+        # current mutable prices
+        self._symbols: Dict[str, float] = dict(self._initial_symbols)
+
         self._clients: Set[WebSocket] = set()
         self._task: asyncio.Task | None = None
         self._lock = asyncio.Lock()
+
+    # --------------------------------------------------------------------- #
+    # Lifecycle for background loop
+    # --------------------------------------------------------------------- #
 
     def start(self) -> None:
         """Start the background async loop that ticks prices and broadcasts."""
@@ -36,6 +45,10 @@ class StockService:
                 pass
             self._task = None
 
+    # --------------------------------------------------------------------- #
+    # WebSocket client management
+    # --------------------------------------------------------------------- #
+
     async def register(self, ws: WebSocket) -> None:
         async with self._lock:
             self._clients.add(ws)
@@ -43,6 +56,10 @@ class StockService:
     async def unregister(self, ws: WebSocket) -> None:
         async with self._lock:
             self._clients.discard(ws)
+
+    # --------------------------------------------------------------------- #
+    # Background price update loop
+    # --------------------------------------------------------------------- #
 
     async def _run(self) -> None:
         """Main async loop: update prices and broadcast batches."""
@@ -59,6 +76,7 @@ class StockService:
         updates: List[StockTicker] = []
         now = datetime.now(timezone.utc)
         for sym, price in list(self._symbols.items()):
+            # random walk around the current price
             delta = random.uniform(-1.0, 1.0)
             new_price = max(0.01, price + delta)
             change = new_price - price
@@ -88,5 +106,67 @@ class StockService:
         coros = [ws.send_json(payload) for ws in clients]
         if coros:
             await asyncio.gather(*coros, return_exceptions=True)
+
+    # --------------------------------------------------------------------- #
+    # HTTP-style helpers for REST endpoints
+    # --------------------------------------------------------------------- #
+
+    def snapshot(self) -> List[StockTicker]:
+        """
+        Return a snapshot of all symbols as StockTicker models.
+
+        For the snapshot we set change/percent_change to 0, since they are
+        only meaningful in the streaming updates.
+        """
+        now = datetime.now(timezone.utc)
+        return [
+            StockTicker(
+                symbol=sym,
+                price=round(price, 2),
+                change=0.0,
+                percent_change=0.0,
+                last_updated=now,
+            )
+            for sym, price in self._symbols.items()
+        ]
+
+    def get_ticker(self, symbol: str) -> Optional[StockTicker]:
+        """
+        Return a single ticker, or None if unknown.
+        """
+        price = self._symbols.get(symbol.upper())
+        if price is None:
+            return None
+        now = datetime.now(timezone.utc)
+        return StockTicker(
+            symbol=symbol.upper(),
+            price=round(price, 2),
+            change=0.0,
+            percent_change=0.0,
+            last_updated=now,
+        )
+
+    def reset_ticker(self, symbol: str) -> StockTicker:
+        """
+        Reset a ticker back to its initial configured price.
+
+        Raises KeyError if the symbol is not known.
+        """
+        key = symbol.upper()
+        if key not in self._initial_symbols:
+            raise KeyError(key)
+
+        base_price = self._initial_symbols[key]
+        self._symbols[key] = base_price
+
+        now = datetime.now(timezone.utc)
+        return StockTicker(
+            symbol=key,
+            price=round(base_price, 2),
+            change=0.0,
+            percent_change=0.0,
+            last_updated=now,
+        )
+
 
 stock_service = StockService()
