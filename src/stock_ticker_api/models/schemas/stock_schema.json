@@ -1,0 +1,31 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "StockTicker",
+  "type": "object",
+  "properties": {
+    "symbol": {
+      "type": "string"
+    },
+    "price": {
+      "type": "number"
+    },
+    "change": {
+      "type": "number"
+    },
+    "percent_change": {
+      "type": "number"
+    },
+    "last_updated": {
+      "type": "string",
+      "format": "date-time"
+    }
+  },
+  "required": [
+    "symbol",
+    "price",
+    "change",
+    "percent_change",
+    "last_updated"
+  ],
+  "additionalProperties": false
+}

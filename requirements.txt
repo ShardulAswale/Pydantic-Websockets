@@ -1,0 +1,4 @@
+# This file will be generated with:
+#   pip freeze > requirements.txt
+#
+# Keep it committed for reproducible installs.
